@@ -1,6 +1,6 @@
 [
 	{
-		"caption": "Sort Numerically",
+		"caption": "Sort Lines (Numerically)",
 		"command": "sort_numerically"
 	}
 ]
