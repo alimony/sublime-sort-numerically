@@ -1,10 +1,10 @@
 [
-{
-    "id": "edit",
-    "children":
-    [
-        {"id": "permute"},
-        { "command": "sort_numerically", "caption": "Sort Lines (Numerically)", "mnemonic": "n" }
-    ]
-}
+	{
+		"id": "edit",
+		"children":
+		[
+			{ "id": "permute" },
+			{ "command": "sort_numerically", "caption": "Sort Lines (Numerically)", "mnemonic": "n" }
+		]
+	}
 ]
