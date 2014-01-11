@@ -1,6 +1,6 @@
 # Sort Lines (Numerically)
 
-Sublime Text 2 package that adds a command for sorting lines numerically rather than alphabetically.
+Sublime Text 2/3 package that adds a command for sorting lines numerically rather than alphabetically.
 
 Installation
 ------------
