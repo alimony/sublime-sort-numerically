@@ -4,7 +4,7 @@ Sublime Text 2/3 package that adds a command for sorting lines numerically rathe
 
 Installation
 ------------
-This package is available through [Package Control](http://wbond.net/sublime_packages/package_control), it’s called “Sort Lines (Numerically)”.
+This package is available through [Package Control](https://sublime.wbond.net/), it’s called “Sort Lines (Numerically)”.
 
 Usage
 -----
