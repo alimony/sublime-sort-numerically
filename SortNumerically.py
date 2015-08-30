@@ -29,4 +29,8 @@ class SortNumericallyCommand(sublime_plugin.TextCommand):
 
             output = line_ending_character.join(sorted_lines)
 
+            # If the end of the region had a line ending character, we re-add it here
+            if self.view.substr(region).endswith(line_ending_character):
+                output += line_ending_character
+
             self.view.replace(edit, region, output)
