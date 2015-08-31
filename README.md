@@ -59,4 +59,7 @@ You will now have a command called `Sort Lines (Numerically) Reverse` in your co
 
 Credits
 -------
-Thanks to Curtis Gibby ([@curtisgibby](https://github.com/curtisgibby)) for contributions.
+Thanks to the following contributors:
+
+* Curtis Gibby – [@curtisgibby](https://github.com/curtisgibby)
+* David Jack Wange Olrik – [@davidolrik](https://github.com/davidolrik)
