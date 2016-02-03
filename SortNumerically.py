@@ -5,6 +5,8 @@ import sublime
 import sublime_plugin
 import re
 
+LINE_ENDING_CHARACTER = '\n'
+
 
 class SortNumericallyCommand(sublime_plugin.TextCommand):
     def run(self, edit):
@@ -18,19 +20,10 @@ class SortNumericallyCommand(sublime_plugin.TextCommand):
             alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
             sorted_lines = sorted(lines, key=alphanum_key)
 
-            # Determine the current line ending setting, so we can rejoin the
-            # sorted lines using the correct line ending character.
-            line_ending_character = '\n'  # Default.
-            line_endings = self.view.line_endings()
-            if line_endings == 'CR':
-                line_ending_character = '\r'
-            elif line_endings == 'Windows':
-                line_ending_character = '\r\n'
-
-            output = line_ending_character.join(sorted_lines)
+            output = LINE_ENDING_CHARACTER.join(sorted_lines)
 
             # If the end of the region had a line ending character, we re-add it here
-            if self.view.substr(region).endswith(line_ending_character):
-                output += line_ending_character
+            if self.view.substr(region).endswith(LINE_ENDING_CHARACTER):
+                output += LINE_ENDING_CHARACTER
 
             self.view.replace(edit, region, output)
