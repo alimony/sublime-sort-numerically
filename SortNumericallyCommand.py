@@ -1,24 +1,37 @@
 # This simple plugin is based on:
 # http://www.codinghorror.com/blog/2007/12/sorting-for-humans-natural-sort-order.html
 
+import os
+import sys
+
 import sublime
 import sublime_plugin
-import re
+
+sys.path.append(os.path.dirname(sys.executable))
+
+try:
+    # This import method works in Sublime Text 2.
+    from sort_numerically import sort_lines
+except ImportError:
+    # While this works in Sublime Text 3.
+    from .sort_numerically import sort_lines
 
 LINE_ENDING_CHARACTER = '\n'
 
 
 class SortNumericallyCommand(sublime_plugin.TextCommand):
+
     def run(self, edit):
+
         regions = self.view.sel()
+
         if len(regions) == 1 and regions[0].empty():
             # Selection is empty, use the entire buffer.
             regions = [sublime.Region(0, self.view.size())]
+
         for region in regions:
-            lines = [self.view.substr(r) for r in self.view.lines(region)]
-            convert = lambda text: int(text) if text.isdigit() else text
-            alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
-            sorted_lines = sorted(lines, key=alphanum_key)
+            input_lines = [self.view.substr(r) for r in self.view.lines(region)]
+            sorted_lines = sort_lines(input_lines)
 
             output = LINE_ENDING_CHARACTER.join(sorted_lines)
 
