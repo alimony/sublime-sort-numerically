@@ -13,13 +13,13 @@ LINE_ENDING_CHARACTER = '\n'
 
 def convert(text):
     try:
-        return int(text)
+        return float(text)
     except ValueError:
         return text
 
 
 def alphanum_key(key):
-    return [convert(c) for c in re.split('(-?[0-9]+)', key)]
+    return [convert(c) for c in re.split('(-?[.0-9]+)', key)]
 
 
 def sort_lines(input_lines):

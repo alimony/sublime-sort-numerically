@@ -63,6 +63,21 @@ if __name__ == '__main__':
             ]
             self.assertEqual(sort_lines(input_lines), expected_output_lines)
 
+        def test_sort_with_decimals(self):
+            input_lines = [
+                '1.5',
+                '1',
+                '2.5',
+                '2',
+            ]
+            expected_output_lines = [
+                '1',
+                '1.5',
+                '2',
+                '2.5',
+            ]
+            self.assertEqual(sort_lines(input_lines), expected_output_lines)
+
         def test_sort_with_multiple_int_groups(self):
             input_lines = [
                 '1 1',
@@ -90,6 +105,27 @@ if __name__ == '__main__':
                 '1',
                 '2',
                 '3',
+            ]
+            self.assertEqual(sort_lines(input_lines), expected_output_lines)
+
+        def test_sort_with_negative_decimals(self):
+            input_lines = [
+                '2',
+                '1.2',
+                '1',
+                '0',
+                '-1',
+                '-1.2',
+                '-2',
+            ]
+            expected_output_lines = [
+                '-2',
+                '-1.2',
+                '-1',
+                '0',
+                '1',
+                '1.2',
+                '2',
             ]
             self.assertEqual(sort_lines(input_lines), expected_output_lines)
 
