@@ -146,4 +146,17 @@ if __name__ == '__main__':
             ]
             self.assertEqual(sort_lines(input_lines), expected_output_lines)
 
+        def test_sort_with_alphanumeric_partial_formatting(self):
+            input_lines = [
+                '2 a',
+                '1 b2',
+                '1 b.',
+            ]
+            expected_output_lines = [
+                '1 b2',
+                '1 b.',
+                '2 a',
+            ]
+            self.assertEqual(sort_lines(input_lines), expected_output_lines)
+
     unittest.main(argv=['TestSortNumerically'])
