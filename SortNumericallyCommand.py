@@ -10,10 +10,10 @@ sys.path.append(os.path.dirname(sys.executable))
 
 try:
     # This import method works in Sublime Text 2.
-    from sort_numerically import sort_lines
+    from sort_numerically.sort_numerically import sort_lines
 except ImportError:
     # While this works in Sublime Text 3.
-    from .sort_numerically import sort_lines
+    from .sort_numerically.sort_numerically import sort_lines
 
 
 class SortNumericallyCommand(sublime_plugin.TextCommand):

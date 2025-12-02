@@ -7,7 +7,7 @@ from __future__ import unicode_literals
 
 if __name__ == '__main__':
     import unittest
-    from sort_numerically import sort_lines
+    from sort_numerically.sort_numerically import sort_lines
 
     class TestSortNumerically(unittest.TestCase):
 
