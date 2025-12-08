@@ -38,103 +38,39 @@ that ensures "val" is a local variable instead of global variable
 and thus has a slightly improved performance at runtime.
 
 """
+from __future__ import absolute_import, division, print_function, unicode_literals
+
 import re
+from collections import deque
 from functools import partial, reduce
 from itertools import chain as ichain
 from operator import methodcaller
-from pathlib import PurePath
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Iterable,
-    Iterator,
-    List,
-    Match,
-    Optional,
-    Pattern,
-    TYPE_CHECKING,
-    Tuple,
-    Union,
-    cast,
-    overload,
-)
+from os import curdir as os_curdir
+from os import pardir as os_pardir
+from os import sep as os_sep
+from os.path import split as path_split
+from os.path import splitext as path_splitext
 from unicodedata import normalize
 
-from natsort.compat.fastnumbers import try_float, try_int
-from natsort.compat.locale import (
-    StrOrBytes,
-    get_decimal_point,
-    get_strxfrm,
-    get_thousands_sep,
+from natsort.compat.fastnumbers import fast_float, fast_int
+from natsort.compat.locale import get_decimal_point, get_strxfrm, get_thousands_sep
+from natsort.compat.pathlib import PurePath, has_pathlib
+from natsort.compat.py23 import (
+    NEWPY,
+    PY_VERSION,
+    py23_filter,
+    py23_map,
+    py23_str,
+    u_format,
 )
-from natsort.ns_enum import NSType, NS_DUMB, ns
+from natsort.ns_enum import NS_DUMB, ns
 from natsort.unicode_numbers import digits_no_decimals, numeric_no_decimals
 
-if TYPE_CHECKING:
-    from typing_extensions import Protocol
-else:
-    Protocol = object
-
-#
-# Pre-define a slew of aggregate types which makes the type hinting below easier
-#
+if PY_VERSION >= 3:
+    long = int
 
 
-class SupportsDunderLT(Protocol):
-    def __lt__(self, __other: Any) -> bool:
-        ...
-
-
-class SupportsDunderGT(Protocol):
-    def __gt__(self, __other: Any) -> bool:
-        ...
-
-
-Sortable = Union[SupportsDunderLT, SupportsDunderGT]
-
-StrToStr = Callable[[str], str]
-AnyCall = Callable[[Any], Any]
-
-# For the bytes transform factory
-BytesTuple = Tuple[bytes]
-NestedBytesTuple = Tuple[Tuple[bytes]]
-BytesTransform = Union[BytesTuple, NestedBytesTuple]
-BytesTransformer = Callable[[bytes], BytesTransform]
-
-# For the number transform factory
-BasicTuple = Tuple[Any, ...]
-NestedAnyTuple = Tuple[BasicTuple, ...]
-AnyTuple = Union[BasicTuple, NestedAnyTuple]
-NumTransform = AnyTuple
-NumTransformer = Callable[[Any], NumTransform]
-
-# For the string component transform factory
-StrBytesNum = Union[str, bytes, float, int]
-StrTransformer = Callable[[Iterable[str]], Iterator[StrBytesNum]]
-
-# For the final data transform factory
-FinalTransform = AnyTuple
-FinalTransformer = Callable[[Iterable[Any], str], FinalTransform]
-
-PathArg = Union[str, PurePath]
-MatchFn = Callable[[str], Optional[Match]]
-
-# For the string parsing factory
-StrSplitter = Callable[[str], Iterable[str]]
-StrParser = Callable[[PathArg], FinalTransform]
-
-# For the path parsing factory
-PathSplitter = Callable[[PathArg], Tuple[FinalTransform, ...]]
-
-# For the natsort key
-NatsortInType = Optional[Sortable]
-NatsortOutType = Tuple[Sortable, ...]
-KeyType = Callable[[Any], NatsortInType]
-MaybeKeyType = Optional[KeyType]
-
-
-class NumericalRegularExpressions:
+class NumericalRegularExpressions(object):
     """
     Container of regular expressions that match numbers.
 
@@ -144,51 +80,51 @@ class NumericalRegularExpressions:
     """
 
     # All unicode numeric characters (minus the decimal characters).
-    numeric: str = numeric_no_decimals
+    numeric = numeric_no_decimals
     # All unicode digit characters (minus the decimal characters).
-    digits: str = digits_no_decimals
+    digits = digits_no_decimals
     # Regular expression to match exponential component of a float.
-    exp: str = r"(?:[eE][-+]?\d+)?"
+    exp = r"(?:[eE][-+]?\d+)?"
     # Regular expression to match a floating point number.
-    float_num: str = r"(?:\d+\.?\d*|\.\d+)"
+    float_num = r"(?:\d+\.?\d*|\.\d+)"
 
     @classmethod
-    def _construct_regex(cls, fmt: str) -> Pattern[str]:
+    def _construct_regex(cls, fmt):
         """Given a format string, construct the regex with class attributes."""
         return re.compile(fmt.format(**vars(cls)), flags=re.U)
 
     @classmethod
-    def int_sign(cls) -> Pattern[str]:
+    def int_sign(cls):
         """Regular expression to match a signed int."""
         return cls._construct_regex(r"([-+]?\d+|[{digits}])")
 
     @classmethod
-    def int_nosign(cls) -> Pattern[str]:
+    def int_nosign(cls):
         """Regular expression to match an unsigned int."""
         return cls._construct_regex(r"(\d+|[{digits}])")
 
     @classmethod
-    def float_sign_exp(cls) -> Pattern[str]:
+    def float_sign_exp(cls):
         """Regular expression to match a signed float with exponent."""
         return cls._construct_regex(r"([-+]?{float_num}{exp}|[{numeric}])")
 
     @classmethod
-    def float_nosign_exp(cls) -> Pattern[str]:
+    def float_nosign_exp(cls):
         """Regular expression to match an unsigned float with exponent."""
         return cls._construct_regex(r"({float_num}{exp}|[{numeric}])")
 
     @classmethod
-    def float_sign_noexp(cls) -> Pattern[str]:
+    def float_sign_noexp(cls):
         """Regular expression to match a signed float without exponent."""
         return cls._construct_regex(r"([-+]?{float_num}|[{numeric}])")
 
     @classmethod
-    def float_nosign_noexp(cls) -> Pattern[str]:
+    def float_nosign_noexp(cls):
         """Regular expression to match an unsigned float without exponent."""
         return cls._construct_regex(r"({float_num}|[{numeric}])")
 
 
-def regex_chooser(alg: NSType) -> Pattern[str]:
+def regex_chooser(alg):
     """
     Select an appropriate regex for the type of number of interest.
 
@@ -218,12 +154,12 @@ def regex_chooser(alg: NSType) -> Pattern[str]:
     }[alg]
 
 
-def _no_op(x: Any) -> Any:
+def _no_op(x):
     """A function that does nothing and returns the input as-is."""
     return x
 
 
-def _normalize_input_factory(alg: NSType) -> StrToStr:
+def _normalize_input_factory(alg):
     """
     Create a function that will normalize unicode input data.
 
@@ -240,57 +176,14 @@ def _normalize_input_factory(alg: NSType) -> StrToStr:
 
     """
     normalization_form = "NFKD" if alg & ns.COMPATIBILITYNORMALIZE else "NFD"
-    return partial(normalize, normalization_form)
+    wrapped = partial(normalize, normalization_form)
+    if NEWPY:
+        return wrapped
+    else:
+        return lambda x, _f=wrapped: _f(x) if isinstance(x, py23_str) else x
 
 
-def _compose_input_factory(alg: NSType) -> StrToStr:
-    """
-    Create a function that will compose unicode input data.
-
-    Parameters
-    ----------
-    alg : ns enum
-        Used to indicate how to compose unicode.
-
-    Returns
-    -------
-    func : callable
-        A function that accepts string (unicode) input and returns the
-        the input normalized with the desired composition scheme.
-    """
-    normalization_form = "NFKC" if alg & ns.COMPATIBILITYNORMALIZE else "NFC"
-    return partial(normalize, normalization_form)
-
-
-@overload
-def natsort_key(
-    val: NatsortInType,
-    key: None,
-    string_func: Union[StrParser, PathSplitter],
-    bytes_func: BytesTransformer,
-    num_func: NumTransformer,
-) -> NatsortOutType:
-    ...
-
-
-@overload
-def natsort_key(
-    val: Any,
-    key: KeyType,
-    string_func: Union[StrParser, PathSplitter],
-    bytes_func: BytesTransformer,
-    num_func: NumTransformer,
-) -> NatsortOutType:
-    ...
-
-
-def natsort_key(
-    val: Union[NatsortInType, Any],
-    key: MaybeKeyType,
-    string_func: Union[StrParser, PathSplitter],
-    bytes_func: BytesTransformer,
-    num_func: NumTransformer,
-) -> NatsortOutType:
+def natsort_key(val, key, string_func, bytes_func, num_func):
     """
     Key to sort strings and numbers naturally.
 
@@ -299,7 +192,7 @@ def natsort_key(
 
     Parameters
     ----------
-    val : str | bytes | int | float | iterable
+    val : str | unicode | bytes | int | float | iterable
     key : callable | None
         A key to apply to the *val* before any other operations are performed.
     string_func : callable
@@ -329,7 +222,7 @@ def natsort_key(
     --------
     parse_string_factory
     parse_bytes_factory
-    parse_number_or_none_factory
+    parse_number_factory
 
     """
 
@@ -337,20 +230,28 @@ def natsort_key(
     if key is not None:
         val = key(val)
 
-    if isinstance(val, (str, PurePath)):
+    # Assume the input are strings, which is the most common case
+    try:
         return string_func(val)
-    elif isinstance(val, bytes):
-        return bytes_func(val)
-    elif isinstance(val, Iterable):
-        # Must be parsed recursively, but do not apply the key recursively.
-        return tuple(
-            natsort_key(x, None, string_func, bytes_func, num_func) for x in val
-        )
-    else:  # Anything else goes here
-        return num_func(val)
+    except (TypeError, AttributeError):
+
+        # If bytes type, use the bytes_func
+        if type(val) in (bytes,):
+            return bytes_func(val)
+
+        # Otherwise, assume it is an iterable that must be parsed recursively.
+        # Do not apply the key recursively.
+        try:
+            return tuple(
+                natsort_key(x, None, string_func, bytes_func, num_func) for x in val
+            )
+
+        # If that failed, it must be a number.
+        except TypeError:
+            return num_func(val)
 
 
-def parse_bytes_factory(alg: NSType) -> BytesTransformer:
+def parse_bytes_factory(alg):
     """
     Create a function that will format a *bytes* object into a tuple.
 
@@ -383,11 +284,9 @@ def parse_bytes_factory(alg: NSType) -> BytesTransformer:
         return lambda x: (x,)
 
 
-def parse_number_or_none_factory(
-    alg: NSType, sep: StrOrBytes, pre_sep: str
-) -> NumTransformer:
+def parse_number_factory(alg, sep, pre_sep):
     """
-    Create a function that will format a number (or None) into a tuple.
+    Create a function that will format a number into a tuple.
 
     Parameters
     ----------
@@ -416,24 +315,9 @@ def parse_number_or_none_factory(
     """
     nan_replace = float("+inf") if alg & ns.NANLAST else float("-inf")
 
-    def func(
-        val: Any,
-        _nan_replace: float = nan_replace,
-        _sep: StrOrBytes = sep,
-        reverse: bool = nan_replace == float("+inf"),
-    ) -> BasicTuple:
+    def func(val, _nan_replace=nan_replace, _sep=sep):
         """Given a number, place it in a tuple with a leading null string."""
-        # Add a trailing string numbers equaling _nan_replace. This will make
-        # the ordering between None NaN, and the NaN replacement value...
-        # None comes first, then NaN, then the replacement value.
-        if val != val:
-            return _sep, _nan_replace, "3" if reverse else "1"
-        elif val is None:
-            return _sep, _nan_replace, "2"
-        elif val == _nan_replace:
-            return _sep, _nan_replace, "1" if reverse else "3"
-        else:
-            return _sep, val
+        return _sep, _nan_replace if val != val else val
 
     # Return the function, possibly wrapping in tuple if PATH is selected.
     if alg & ns.PATH and alg & ns.UNGROUPLETTERS and alg & ns.LOCALEALPHA:
@@ -447,13 +331,8 @@ def parse_number_or_none_factory(
 
 
 def parse_string_factory(
-    alg: NSType,
-    sep: StrOrBytes,
-    splitter: StrSplitter,
-    input_transform: StrToStr,
-    component_transform: StrTransformer,
-    final_transform: FinalTransformer,
-) -> StrParser:
+    alg, sep, splitter, input_transform, component_transform, final_transform
+):
     """
     Create a function that will split and format a *str* into a tuple.
 
@@ -503,29 +382,23 @@ def parse_string_factory(
     orig_after_xfrm = not (alg & NS_DUMB and alg & ns.LOCALEALPHA)
     original_func = input_transform if orig_after_xfrm else _no_op
     normalize_input = _normalize_input_factory(alg)
-    compose_input = _compose_input_factory(alg) if alg & ns.LOCALEALPHA else _no_op
 
-    def func(x: PathArg) -> FinalTransform:
-        if isinstance(x, PurePath):
-            # While paths are technically not strings, it is natural for them
-            # to be treated the same.
-            x = str(x)
+    def func(x):
         # Apply string input transformation function and return to x.
         # Original function is usually a no-op, but some algorithms require it
         # to also be the transformation function.
-        a = normalize_input(x)
-        b, original = input_transform(a), original_func(a)
-        c = compose_input(b)  # Decompose unicode if using LOCALE
-        d = splitter(c)  # Split string into components.
-        e = filter(None, d)  # Remove empty strings.
-        f = component_transform(e)  # Apply transform on components.
-        g = sep_inserter(f, sep)  # Insert '' between numbers.
-        return final_transform(g, original)  # Apply the final transform.
+        x = normalize_input(x)
+        x, original = input_transform(x), original_func(x)
+        x = splitter(x)  # Split string into components.
+        x = py23_filter(None, x)  # Remove empty strings.
+        x = py23_map(component_transform, x)  # Apply transform on components.
+        x = sep_inserter(x, sep)  # Insert '' between numbers.
+        return final_transform(x, original)  # Apply the final transform.
 
     return func
 
 
-def parse_path_factory(str_split: StrParser) -> PathSplitter:
+def parse_path_factory(str_split):
     """
     Create a function that will properly split and format a path.
 
@@ -549,44 +422,44 @@ def parse_path_factory(str_split: StrParser) -> PathSplitter:
     parse_string_factory
 
     """
-    return lambda x: tuple(map(str_split, path_splitter(x)))
+    return lambda x: tuple(py23_map(str_split, path_splitter(x)))
 
 
-def sep_inserter(iterator: Iterator[Any], sep: StrOrBytes) -> Iterator[Any]:
+def sep_inserter(iterable, sep):
     """
-    Insert '' between numbers in an iterator.
+    Insert '' between numbers in an iterable.
 
     Parameters
     ----------
-    iterator
+    iterable
     sep : str
         The string character to be inserted between adjacent numeric objects.
 
     Yields
     ------
-    The values of *iterator* in order, with *sep* inserted where adjacent
+    The values of *iterable* in order, with *sep* inserted where adjacent
     elements are numeric. If the first element in the input is numeric
     then *sep* will be the first value yielded.
 
     """
     try:
-        # Get the first element. A StopIteration indicates an empty iterator.
+        # Get the first element. A StopIteration indicates an empty iterable.
         # Since we are controlling the types of the input, 'type' is used
         # instead of 'isinstance' for the small speed advantage it offers.
-        types = (int, float)
-        first = next(iterator)
+        types = (int, float, long)
+        first = next(iterable)
         if type(first) in types:
             yield sep
         yield first
 
         # Now, check if pair of elements are both numbers. If so, add ''.
-        second = next(iterator)
+        second = next(iterable)
         if type(first) in types and type(second) in types:
             yield sep
         yield second
 
         # Now repeat in a loop.
-        for x in iterator:
+        for x in iterable:
             first, second = second, x
             if type(first) in types and type(second) in types:
                 yield sep
@@ -597,7 +470,7 @@ def sep_inserter(iterator: Iterator[Any], sep: StrOrBytes) -> Iterator[Any]:
         return
 
 
-def input_string_transform_factory(alg: NSType) -> StrToStr:
+def input_string_transform_factory(alg):
     """
     Create a function to transform a string.
 
@@ -622,12 +495,15 @@ def input_string_transform_factory(alg: NSType) -> StrToStr:
     dumb = alg & NS_DUMB
 
     # Build the chain of functions to execute in order.
-    function_chain: List[StrToStr] = []
+    function_chain = []
     if (dumb and not lowfirst) or (lowfirst and not dumb):
         function_chain.append(methodcaller("swapcase"))
 
     if alg & ns.IGNORECASE:
-        function_chain.append(methodcaller("casefold"))
+        if NEWPY:
+            function_chain.append(methodcaller("casefold"))
+        else:
+            function_chain.append(methodcaller("lower"))
 
     if alg & ns.LOCALENUM:
         # Create a regular expression that will remove thousands separators.
@@ -651,8 +527,8 @@ def input_string_transform_factory(alg: NSType) -> StrToStr:
         strip_thousands = strip_thousands.format(
             thou=re.escape(get_thousands_sep()), nodecimal=nodecimal
         )
-        strip_thousands_re = re.compile(strip_thousands, flags=re.VERBOSE)
-        function_chain.append(partial(strip_thousands_re.sub, ""))
+        strip_thousands = re.compile(strip_thousands, flags=re.VERBOSE)
+        function_chain.append(partial(strip_thousands.sub, ""))
 
         # Create a regular expression that will change the decimal point to
         # a period if not already a period.
@@ -660,14 +536,14 @@ def input_string_transform_factory(alg: NSType) -> StrToStr:
         if alg & ns.FLOAT and decimal != ".":
             switch_decimal = r"(?<=[0-9]){decimal}|{decimal}(?=[0-9])"
             switch_decimal = switch_decimal.format(decimal=re.escape(decimal))
-            switch_decimal_re = re.compile(switch_decimal)
-            function_chain.append(partial(switch_decimal_re.sub, "."))
+            switch_decimal = re.compile(switch_decimal)
+            function_chain.append(partial(switch_decimal.sub, "."))
 
     # Return the chained functions.
     return chain_functions(function_chain)
 
 
-def string_component_transform_factory(alg: NSType) -> StrTransformer:
+def string_component_transform_factory(alg):
     """
     Create a function to either transform a string or convert to a number.
 
@@ -694,26 +570,23 @@ def string_component_transform_factory(alg: NSType) -> StrTransformer:
     nan_val = float("+inf") if alg & ns.NANLAST else float("-inf")
 
     # Build the chain of functions to execute in order.
-    func_chain: List[Callable[[str], StrOrBytes]] = []
+    func_chain = []
     if group_letters:
         func_chain.append(groupletters)
     if use_locale:
         func_chain.append(get_strxfrm())
+    kwargs = {"key": chain_functions(func_chain)} if func_chain else {}
 
     # Return the correct chained functions.
-    kwargs: Dict[str, Union[float, Callable[[str], StrOrBytes], bool]]
-    kwargs = {"on_fail": chain_functions(func_chain)} if func_chain else {}
-    kwargs["map"] = True
     if alg & ns.FLOAT:
+        # noinspection PyTypeChecker
         kwargs["nan"] = nan_val
-        return cast(StrTransformer, partial(try_float, **kwargs))
+        return partial(fast_float, **kwargs)
     else:
-        return cast(StrTransformer, partial(try_int, **kwargs))
+        return partial(fast_int, **kwargs)
 
 
-def final_data_transform_factory(
-    alg: NSType, sep: StrOrBytes, pre_sep: str
-) -> FinalTransformer:
+def final_data_transform_factory(alg, sep, pre_sep):
     """
     Create a function to transform a tuple.
 
@@ -741,15 +614,9 @@ def final_data_transform_factory(
     """
     if alg & ns.UNGROUPLETTERS and alg & ns.LOCALEALPHA:
         swap = alg & NS_DUMB and alg & ns.LOWERCASEFIRST
-        transform = cast(StrToStr, methodcaller("swapcase") if swap else _no_op)
+        transform = methodcaller("swapcase") if swap else _no_op
 
-        def func(
-            split_val: Iterable[NatsortInType],
-            val: str,
-            _transform: StrToStr = transform,
-            _sep: StrOrBytes = sep,
-            _pre_sep: str = pre_sep,
-        ) -> FinalTransform:
+        def func(split_val, val, _transform=transform, _sep=sep, _pre_sep=pre_sep):
             """
             Return a tuple with the first character of the first element
             of the return value as the first element, and the return value
@@ -764,25 +631,17 @@ def final_data_transform_factory(
             else:
                 return (_transform(val[0]),), split_val
 
+        return func
     else:
-
-        def func(
-            split_val: Iterable[NatsortInType],
-            val: str,
-            _transform: StrToStr = _no_op,
-            _sep: StrOrBytes = sep,
-            _pre_sep: str = pre_sep,
-        ) -> FinalTransform:
-            return tuple(split_val)
-
-    return func
+        return lambda split_val, val: tuple(split_val)
 
 
-lower_function: StrToStr = cast(StrToStr, methodcaller("casefold"))
+lower_function = methodcaller("casefold" if NEWPY else "lower")
 
 
 # noinspection PyIncorrectDocstring
-def groupletters(x: str, _low: StrToStr = lower_function) -> str:
+@u_format
+def groupletters(x, _low=lower_function):
     """
     Double all characters, making doubled letters lowercase.
 
@@ -798,13 +657,13 @@ def groupletters(x: str, _low: StrToStr = lower_function) -> str:
     --------
 
         >>> groupletters("Apple")
-        'aAppppllee'
+        {u}'aAppppllee'
 
     """
     return "".join(ichain.from_iterable((_low(y), y) for y in x))
 
 
-def chain_functions(functions: Iterable[AnyCall]) -> AnyCall:
+def chain_functions(functions):
     """
     Chain a list of single-argument functions together and return.
 
@@ -841,17 +700,7 @@ def chain_functions(functions: Iterable[AnyCall]) -> AnyCall:
         return partial(reduce, lambda res, f: f(res), functions)
 
 
-@overload
-def do_decoding(s: bytes, encoding: str) -> str:
-    ...
-
-
-@overload
-def do_decoding(s: Any, encoding: str) -> Any:
-    ...
-
-
-def do_decoding(s: Any, encoding: str) -> Any:
+def do_decoding(s, encoding):
     """
     Helper to decode a *bytes* object, or return the object as-is.
 
@@ -868,16 +717,15 @@ def do_decoding(s: Any, encoding: str) -> Any:
         *s* if *s* was not *bytes*.
 
     """
-    if isinstance(s, bytes):
+    try:
         return s.decode(encoding)
-    else:
+    except (AttributeError, TypeError):
         return s
 
 
 # noinspection PyIncorrectDocstring
-def path_splitter(
-    s: PathArg, treat_base: bool = True, _d_match: MatchFn = re.compile(r"\.\d").match
-) -> Iterator[str]:
+@u_format
+def path_splitter(s, _d_match=re.compile(r"\.\d").match):
     """
     Split a string into its path components.
 
@@ -886,10 +734,6 @@ def path_splitter(
     Parameters
     ----------
     s : str | pathlib.Path
-    treat_base: bool, optional
-        If True, treat the base of component of the file path as
-        special and split off extensions. If False, do not do this.
-        The default is True.
 
     Returns
     -------
@@ -900,35 +744,47 @@ def path_splitter(
     --------
 
         >>> tuple(path_splitter("this/thing.ext"))
-        ('this', 'thing', '.ext')
+        ({u}'this', {u}'thing', {u}'.ext')
 
     """
-    if not isinstance(s, PurePath):
-        s = PurePath(s)
+    if has_pathlib and isinstance(s, PurePath):
+        s = py23_str(s)
+    path_parts = deque()
+    p_appendleft = path_parts.appendleft
+    # Continue splitting the path from the back until we have reached
+    # '..' or '.', or until there is nothing left to split.
+    path_location = s
+    while path_location != os_curdir and path_location != os_pardir:
+        parent_path = path_location
+        path_location, child_path = path_split(parent_path)
+        if path_location == parent_path:
+            break
+        p_appendleft(child_path)
 
-    # Split the path into parts.
-    try:
-        *path_parts, base = s.parts
-    except ValueError:
-        path_parts = []
-        base = str(s)
+    # This last append is the base path.
+    # Only append if the string is non-empty.
+    # Make sure the proper path separator for this OS is used
+    # no matter what was actually given.
+    if path_location:
+        p_appendleft(py23_str(os_sep))
 
-    suffixes = []
-    if treat_base:
-        # Now, split off the file extensions until
-        #  - we reach a decimal number at the beginning of the suffix
-        #  - more than two suffixes have been seen
-        #  - a suffix is more than five characters (including leading ".")
-        #  - there are no more extensions
-        for i, suffix in enumerate(reversed(PurePath(base).suffixes)):
-            if _d_match(suffix) or i > 1 or len(suffix) > 5:
-                break
-            suffixes.append(suffix)
-        suffixes.reverse()
+    # Now, split off the file extensions using a similar method to above.
+    # Continue splitting off file extensions until we reach a decimal number
+    # or there are no more extensions.
+    # We are not using built-in functionality of PathLib here because of
+    # the recursive splitting up to a decimal.
+    base = path_parts.pop()
+    base_parts = deque()
+    b_appendleft = base_parts.appendleft
+    while True:
+        front = base
+        base, ext = path_splitext(front)
+        if _d_match(ext) or not ext:
+            # Reset base to before the split if the split is invalid.
+            base = front
+            break
+        b_appendleft(ext)
+    b_appendleft(base)
 
-    # Remove the suffixes from the base component
-    base = base.replace("".join(suffixes), "")
-    base_component = [base] if base else []
-
-    # Join all path comonents in an iterator
-    return filter(None, ichain(path_parts, base_component, suffixes))
+    # Return the split parent paths and then the split basename.
+    return ichain(path_parts, base_parts)

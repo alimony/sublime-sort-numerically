@@ -1150,13 +1150,6 @@ numeric_hex = (
     0x10F52,
     0x10F53,
     0x10F54,
-    0x10FC5,
-    0x10FC6,
-    0x10FC7,
-    0x10FC8,
-    0x10FC9,
-    0x10FCA,
-    0x10FCB,
     0x11052,
     0x11053,
     0x11054,
@@ -1318,16 +1311,6 @@ numeric_hex = (
     0x118F0,
     0x118F1,
     0x118F2,
-    0x11950,
-    0x11951,
-    0x11952,
-    0x11953,
-    0x11954,
-    0x11955,
-    0x11956,
-    0x11957,
-    0x11958,
-    0x11959,
     0x11C50,
     0x11C51,
     0x11C52,
@@ -1519,16 +1502,6 @@ numeric_hex = (
     0x16A67,
     0x16A68,
     0x16A69,
-    0x16AC0,
-    0x16AC1,
-    0x16AC2,
-    0x16AC3,
-    0x16AC4,
-    0x16AC5,
-    0x16AC6,
-    0x16AC7,
-    0x16AC8,
-    0x16AC9,
     0x16B50,
     0x16B51,
     0x16B52,
@@ -1842,16 +1815,6 @@ numeric_hex = (
     0x1F10A,
     0x1F10B,
     0x1F10C,
-    0x1FBF0,
-    0x1FBF1,
-    0x1FBF2,
-    0x1FBF3,
-    0x1FBF4,
-    0x1FBF5,
-    0x1FBF6,
-    0x1FBF7,
-    0x1FBF8,
-    0x1FBF9,
     0x20001,
     0x20064,
     0x200E2,
@@ -1869,3 +1832,21 @@ numeric_hex = (
     0x2626D,
     0x2F890,
 )
+
+# Some code that can be used to create the above list of hex numbers.
+if __name__ == "__main__":
+    import unicodedata
+    from natsort.compat.py23 import py23_range, py23_unichr
+
+    hex_chars = []
+    for i in py23_range(0x110000):
+        try:
+            a = py23_unichr(i)
+        except ValueError:
+            break
+        if a in "0123456789":
+            continue
+        if unicodedata.numeric(a, None) is not None:
+            hex_chars.append(i)
+
+    print(", ".join(["0X{:X}".format(i) for i in hex_chars]))

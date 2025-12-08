@@ -1,53 +1,14 @@
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import, division, print_function, unicode_literals
 
-import argparse
 import sys
-from typing import Callable, Iterable, List, Optional, Pattern, Tuple, Union, cast
 
 import natsort
+from natsort.compat.py23 import py23_str
 from natsort.utils import regex_chooser
 
-Num = Union[float, int]
-NumIter = Iterable[Num]
-NumPair = Tuple[Num, Num]
-NumPairIter = Iterable[NumPair]
-NumConverter = Callable[[str], Num]
 
-
-class TypedArgs(argparse.Namespace):
-    paths: bool
-    filter: Optional[List[NumPair]]
-    reverse_filter: Optional[List[NumPair]]
-    exclude: List[Num]
-    reverse: bool
-    number_type: str
-    nosign: bool
-    sign: bool
-    noexp: bool
-    locale: bool
-    entries: List[str]
-
-    def __init__(
-        self,
-        filter: Optional[List[NumPair]] = None,
-        reverse_filter: Optional[List[NumPair]] = None,
-        exclude: Optional[List[Num]] = None,
-        paths: bool = False,
-        reverse: bool = False,
-    ) -> None:
-        """Used by testing only"""
-        self.filter = filter
-        self.reverse_filter = reverse_filter
-        self.exclude = [] if exclude is None else exclude
-        self.paths = paths
-        self.reverse = reverse
-        self.number_type = "int"
-        self.signed = False
-        self.exp = True
-        self.locale = False
-
-
-def main(*arguments: str) -> None:
+def main(*arguments):
     """
     Performs a natural sort on entries given on the command-line.
 
@@ -58,8 +19,7 @@ def main(*arguments: str) -> None:
     from textwrap import dedent
 
     parser = ArgumentParser(
-        description=dedent(cast(str, main.__doc__)),
-        formatter_class=RawDescriptionHelpFormatter,
+        description=dedent(main.__doc__), formatter_class=RawDescriptionHelpFormatter
     )
     parser.add_argument(
         "--version",
@@ -168,7 +128,7 @@ def main(*arguments: str) -> None:
         help="The entries to sort. Taken from stdin if nothing is given on "
         "the command line.",
     )
-    args = parser.parse_args(arguments or None, namespace=TypedArgs())
+    args = parser.parse_args(arguments or None)
 
     # Make sure the filter range is given properly. Does nothing if no filter
     args.filter = check_filters(args.filter)
@@ -181,7 +141,7 @@ def main(*arguments: str) -> None:
     sort_and_print_entries(entries, args)
 
 
-def range_check(low: Num, high: Num) -> NumPair:
+def range_check(low, high):
     """
     Verify that that given range has a low lower than the high.
 
@@ -206,7 +166,7 @@ def range_check(low: Num, high: Num) -> NumPair:
         return low, high
 
 
-def check_filters(filters: Optional[NumPairIter]) -> Optional[List[NumPair]]:
+def check_filters(filters):
     """
     Execute range_check for every element of an iterable.
 
@@ -231,16 +191,10 @@ def check_filters(filters: Optional[NumPairIter]) -> Optional[List[NumPair]]:
     try:
         return [range_check(f[0], f[1]) for f in filters]
     except ValueError as err:
-        raise ValueError("Error in --filter: " + str(err))
+        raise ValueError("Error in --filter: " + py23_str(err))
 
 
-def keep_entry_range(
-    entry: str,
-    lows: NumIter,
-    highs: NumIter,
-    converter: NumConverter,
-    regex: Pattern[str],
-) -> bool:
+def keep_entry_range(entry, lows, highs, converter, regex):
     """
     Check if an entry falls into a desired range.
 
@@ -272,9 +226,7 @@ def keep_entry_range(
     )
 
 
-def keep_entry_value(
-    entry: str, values: NumIter, converter: NumConverter, regex: Pattern[str]
-) -> bool:
+def keep_entry_value(entry, values, converter, regex):
     """
     Check if an entry does not match a given value.
 
@@ -299,13 +251,13 @@ def keep_entry_value(
     return not any(converter(num) in values for num in regex.findall(entry))
 
 
-def sort_and_print_entries(entries: List[str], args: TypedArgs) -> None:
+def sort_and_print_entries(entries, args):
     """Sort the entries, applying the filters first if necessary."""
 
     # Extract the proper number type.
     is_float = args.number_type in ("float", "real", "f", "r")
     signed = args.signed or args.number_type in ("real", "r")
-    alg: int = (
+    alg = (
         natsort.ns.FLOAT * is_float
         | natsort.ns.SIGNED * signed
         | natsort.ns.NOEXP * (not args.exp)
@@ -358,6 +310,6 @@ if __name__ == "__main__":
     try:
         main()
     except ValueError as a:
-        sys.exit(str(a))
+        sys.exit(py23_str(a))
     except KeyboardInterrupt:
         sys.exit(1)

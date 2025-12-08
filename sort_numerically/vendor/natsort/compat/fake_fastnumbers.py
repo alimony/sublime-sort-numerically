@@ -3,12 +3,20 @@
 This module is intended to replicate some of the functionality
 from the fastnumbers module in the event that module is not installed.
 """
-import unicodedata
-from typing import Callable, FrozenSet, Union
+from __future__ import absolute_import, division, print_function, unicode_literals
 
+# Std. lib imports.
+import unicodedata
+
+# Local imports.
+from natsort.compat.py23 import PY_VERSION
 from natsort.unicode_numbers import decimal_chars
 
-_NAN_INF = [
+if PY_VERSION >= 3:
+    long = int
+
+
+NAN_INF = [
     "INF",
     "INf",
     "Inf",
@@ -26,23 +34,21 @@ _NAN_INF = [
     "nAN",
     "Nan",
 ]
-_NAN_INF.extend(["+" + x[:2] for x in _NAN_INF] + ["-" + x[:2] for x in _NAN_INF])
-NAN_INF = frozenset(_NAN_INF)
+NAN_INF.extend(["+" + x[:2] for x in NAN_INF] + ["-" + x[:2] for x in NAN_INF])
+NAN_INF = frozenset(NAN_INF)
 ASCII_NUMS = "0123456789+-"
 POTENTIAL_FIRST_CHAR = frozenset(decimal_chars + list(ASCII_NUMS + "."))
 
-StrOrFloat = Union[str, float]
-StrOrInt = Union[str, int]
 
-
+# noinspection PyIncorrectDocstring
 def fast_float(
-    x: str,
-    key: Callable[[str], str] = lambda x: x,
-    nan: float = float("inf"),
-    _uni: Callable[[str, StrOrFloat], StrOrFloat] = unicodedata.numeric,
-    _nan_inf: FrozenSet[str] = NAN_INF,
-    _first_char: FrozenSet[str] = POTENTIAL_FIRST_CHAR,
-) -> StrOrFloat:
+    x,
+    key=lambda x: x,
+    nan=None,
+    _uni=unicodedata.numeric,
+    _nan_inf=NAN_INF,
+    _first_char=POTENTIAL_FIRST_CHAR,
+):
     """
     Convert a string to a float quickly, return input as-is if not possible.
 
@@ -55,7 +61,7 @@ def fast_float(
         String to attempt to convert to a float.
     key : callable
         Single-argument function to apply to *x* if conversion fails.
-    nan : float
+    nan : object
         Value to return instead of NaN if NaN would be returned.
 
     Returns
@@ -65,8 +71,8 @@ def fast_float(
     """
     if x[0] in _first_char or x.lstrip()[:3] in _nan_inf:
         try:
-            ret = float(x)
-            return nan if ret != ret else ret
+            x = float(x)
+            return nan if nan is not None and x != x else x
         except ValueError:
             try:
                 return _uni(x, key(x)) if len(x) == 1 else key(x)
@@ -79,12 +85,13 @@ def fast_float(
             return key(x)
 
 
+# noinspection PyIncorrectDocstring
 def fast_int(
-    x: str,
-    key: Callable[[str], str] = lambda x: x,
-    _uni: Callable[[str, StrOrInt], StrOrInt] = unicodedata.digit,
-    _first_char: FrozenSet[str] = POTENTIAL_FIRST_CHAR,
-) -> StrOrInt:
+    x,
+    key=lambda x: x,
+    _uni=unicodedata.digit,
+    _first_char=POTENTIAL_FIRST_CHAR,
+):
     """
     Convert a string to a int quickly, return input as-is if not possible.
 
@@ -105,7 +112,7 @@ def fast_int(
     """
     if x[0] in _first_char:
         try:
-            return int(x)
+            return long(x)
         except ValueError:
             try:
                 return _uni(x, key(x)) if len(x) == 1 else key(x)
