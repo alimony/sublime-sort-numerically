@@ -13,7 +13,8 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - ubuntu-latest
+          # Not ubuntu-latest: Python 3.8 and 3.9 have no builds for Ubuntu 26.04.
+          - ubuntu-24.04
           - windows-latest
         python-version:
           - "3.8"
@@ -26,10 +27,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
 
