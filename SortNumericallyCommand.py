@@ -15,6 +15,10 @@ except ImportError:
     # While this works in Sublime Text 3.
     from .sort_numerically.sort_numerically import sort_lines
 
+# The buffer always uses \n, whatever the line endings setting of the view says.
+# That setting only applies when the file is saved.
+LINE_ENDING_CHARACTER = '\n'
+
 
 class SortNumericallyCommand(sublime_plugin.TextCommand):
 
@@ -30,17 +34,10 @@ class SortNumericallyCommand(sublime_plugin.TextCommand):
             input_lines = [self.view.substr(r) for r in self.view.lines(region)]
             sorted_lines = sort_lines(input_lines)
 
-            # Fetch the actual line ending characters used, assuming the same is
-            # used througout the entire region.
-            first_line = self.view.substr(self.view.full_line(0))
-            stripped_line = first_line.rstrip()
-            line_ending_length = len(first_line) - len(stripped_line)
-            line_ending = first_line[len(first_line) - line_ending_length:]
-
-            output = line_ending.join(sorted_lines)
+            output = LINE_ENDING_CHARACTER.join(sorted_lines)
 
             # If the end of the region had a line ending character, we re-add it here
-            if self.view.substr(region).endswith(line_ending):
-                output += line_ending
+            if self.view.substr(region).endswith(LINE_ENDING_CHARACTER):
+                output += LINE_ENDING_CHARACTER
 
             self.view.replace(edit, region, output)
