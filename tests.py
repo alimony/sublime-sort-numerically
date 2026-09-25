@@ -255,4 +255,14 @@ if __name__ == '__main__':
                 'header  \n1\n2\n10\nfooter\n',
             )
 
+        def test_selection_starting_and_ending_inside_lines(self):
+            text = '10 a\n2 b\n1 c'
+            selection = (text.index(' a'), text.index(' c'))
+            self.assertEqual(self.run_command(text, selection), '1 c\n2 b\n10 a')
+
+        def test_selection_ending_at_start_of_line(self):
+            text = '3\n1\n2\n0\n'
+            selection = (0, text.index('0'))
+            self.assertEqual(self.run_command(text, selection), '1\n2\n3\n0\n')
+
     unittest.main(argv=['TestSortNumerically'])
